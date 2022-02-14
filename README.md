@@ -1,3 +1,4 @@
+
 ## COVID Vaccine Acceptance
 
 Code associated with: 
@@ -10,4 +11,3 @@ Recreating chartr (https://www.chartr.co/year-in-charts/2020-in-charts) Vaccine 
 Picking the best of both charts and creating a Mashup of the two charts in R.
 
 inspiration and tutorial: https://riffomonas.org/code_club/
-
