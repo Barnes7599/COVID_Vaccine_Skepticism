@@ -4,23 +4,22 @@ library(glue)
 library(tidyquant)
 library(ggtext)
 library(showtext)
+library(ggrepel)
 
-#34788A Title Text
-#153744 August
-#67698c august text
 
 #add in goggle fonts
 font_add_google(family = "josefin-slab","Josefin Slab")
 font_add_google(family = "josefin-sans", "Josefin Sans")
 font_add_google(family = "patua-one", "Patua One")
 font_add_google(family = "lato", "Lato")
+font_add_google(family = "montserrat", "Montserrat")
 
 #function used to tell the code below use the above fonts
 showtext_auto()
 
 COVIDVAX <- read_excel("~/COVIDVAX.xlsx")
 
-#Ipsos ----
+# Ipsos ----
 
 data_ipsos <- COVIDVAX %>% 
     rename(country = X.1, 
@@ -45,10 +44,10 @@ main_plot <- data_ipsos %>%
     mutate(country = as_factor(country) %>% fct_rev()) %>% 
     ggplot(aes(percent, country, color = month)) +
     geom_line(color = "#e6e6e6", size = 2, show.legend = FALSE) +
-    geom_point(size = 2, show.legend = FALSE) + 
+    geom_point(size = 5, show.legend = FALSE) + 
     geom_text(aes(label = glue("{percent}%"), 
               x = bump), 
-              size = 3,
+              size = 4.5,
               show.legend = FALSE) +
     scale_color_manual(name = NULL, 
                        breaks = c("august", "october"),
@@ -63,7 +62,7 @@ main_plot <- data_ipsos %>%
          caption = "<i>Base: 18,526 online aduts aged 16-74 across 15 countries</i><br> Source: Ipsos") +
     theme_classic() +
     theme(plot.title.position = "plot",
-          plot.title = element_text(face = "bold", margin = margin(b = 20)),
+          plot.title = element_text(face = "bold", margin = margin(b = 50), size = 25),
           plot.caption = element_markdown(hjust = 0, color = "darkgray"),
           plot.caption.position = "plot",
           panel.background = element_blank(),
@@ -92,7 +91,7 @@ main_plot +
                                    color = month, 
                                    label = pretty, 
                                    hjust = align),
-                 size = 2,
+                 size = 5,
                  box.color = NA,
                  box.padding = margin(0,0,0,0),
                  width = NULL, 
@@ -100,8 +99,7 @@ main_plot +
                  fill = NA,
                  show.legend = FALSE)
 
-ggsave("august_october_2020_ipsos.tiff", width = 6, height = 4)
-ggsave("august_october_2020_ipsos.png", width = 6, height = 4)
+
 
 # Chartr ----
 
@@ -265,10 +263,9 @@ data_chartr %>%
     coord_cartesian(clip = "off")
 
 
-ggsave("august_october_2020_chartr.tiff", width = 5, height = 5)
-ggsave("august_october_2020_chartr.png", width = 5, height = 5)
 
-# Smashup ----
+
+# Mashup ----
 
 data_mashup <- COVIDVAX %>% 
     rename(country = X.1, 
@@ -416,5 +413,123 @@ data_mashup %>%
     coord_cartesian(clip = "off")
 
 
-ggsave("august_october_2020_mashup.tiff", width = 5, height = 5)
-ggsave("august_october_2020_mashup.png", width = 5, height = 5)
+
+# slope chart----
+
+data <- COVIDVAX %>% 
+    rename(country = X.1, 
+          august = 'Total Agree - August 2020',
+           october = 'Total Agree - October 2020') %>% 
+    filter(country != "Total") %>% 
+    mutate(country = recode(country, 
+                            "South Korea" = "S.Korea",
+                            "South Africa" = "S. Africa",
+                             "United Kingdom" = "UK",
+                            "United States" = "USA")) 
+# Geom Segment
+data %>%
+    ggplot(aes(x="August",
+               xend= "October",
+               y= august,
+               yend=october,
+               color = country)) +
+    geom_segment()
+
+# Geom Line
+
+
+country_labels <- data %>% 
+    mutate(nrow = 1:n(),
+           month = if_else(nrow %% 2 == 0,
+                           "August '20", "October '20"),
+           percent = if_else(nrow %% 2 == 0,
+                             august,october),
+           nudge_x =  if_else(nrow %% 2 == 0,
+                              -0.05,0.05),
+           change = case_when(august < october ~ "increasing",
+                              august > october ~ "decreasing",
+                              TRUE ~ "stable")
+           ) %>% 
+    select(country, month, percent, nudge_x, change)
+
+
+
+
+data %>% 
+   mutate(country = fct_reorder(country,-october),
+          change = case_when(august < october ~ "increasing",
+                             august > october ~ "decreasing",
+                             TRUE ~ "stable")) %>% 
+    
+   pivot_longer(cols = c("august","october"), 
+                 names_to = "month", 
+                 values_to = "percent") %>% 
+    mutate(month = factor(month, 
+                          levels = c("august", "october"),
+                          labels = c("August '20","October '20"))) %>%
+
+    ggplot(aes(x = month, 
+               y = percent, 
+               group = country,
+               color = change)) +
+    geom_line(show.legend = FALSE, 
+              size = .7) +
+    
+    geom_text_repel(data = country_labels, 
+              aes(x = month, 
+                  y= percent, 
+                  label = country,  
+                  color = change),
+              size = 5, 
+              # inherit.aes = FALSE,
+              hjust = "outward",
+              # for geom_label_repel
+                  # label.padding = unit(1.1, "mm"),
+                  # label.size = unit(.5,"mm"),
+                  # label.r = unit(.2,"mm"),
+              family = "lato",
+              min.segment.length = 0.5,
+              nudge_x = country_labels$nudge_x,
+              # nudge_y = country_labels$nudge, 
+              show.legend = FALSE) +
+    scale_y_continuous(breaks = seq(50, 100, 10),
+                       lim = c(50,100)) +
+    scale_color_manual(values = c("#9e1201", "#b3b3b3", "#b3b3b3")) +
+    labs(
+         title = "COVID-19 Vaccination Intent is <span style='color:#B51300'>Decreasing</span> Globally",
+         subtitle = "From August 2020 to October 2020",
+         caption = "<i>Base: 18,526 online aduts aged 16-74 across 15 countries</i><br>Source: Ipsos",
+         x = NULL,
+         y = "Percent willing to receive vaccine",
+         tag = NULL,
+         color = NULL
+    ) +
+    theme(
+        text = element_text(family = "lato"),
+        plot.title = element_textbox_simple(family = "patua-one",
+                                      size = 33,
+                                      lineheight = 1,
+                                      margin = margin(b=10)), 
+        plot.caption =  element_markdown(lineheight = 1.3,
+                                         margin = margin(t=10),
+                                         hjust = 0,
+                                         color = "#666666",
+                                         family = "lato"),
+        plot.subtitle = element_text(family = "lato",
+                                     size = 18),
+        axis.title.y = element_text(color = "#888888",
+                                    size = 12),
+        axis.text.y = element_text(color = "#888888", 
+                                   size = 12),
+        axis.text.x = element_text(color = "#888888",
+                                   size = 12),
+        axis.line = element_blank(),
+        plot.title.position = "plot",
+        plot.caption.position = "plot",
+        panel.grid = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank()
+    )
+
+
+
