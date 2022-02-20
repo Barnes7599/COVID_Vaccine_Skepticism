@@ -1,0 +1,187 @@
+library(tidyverse)
+library(readxl)
+library(glue)
+library(tidyquant)
+library(ggtext)
+library(showtext)
+library(ggrepel)
+
+
+#add in goggle fonts
+font_add_google(family = "josefin-slab","Josefin Slab")
+font_add_google(family = "josefin-sans", "Josefin Sans")
+font_add_google(family = "patua-one", "Patua One")
+font_add_google(family = "lato", "Lato")
+font_add_google(family = "montserrat", "Montserrat")
+
+#function used to tell the code below use the above fonts
+showtext_auto()
+
+COVIDVAX <- read_excel("~/COVIDVAX.xlsx")
+
+
+
+
+
+# Chartr ----
+
+
+data_chartr <- COVIDVAX %>% 
+  rename(country = X.1, 
+         percent_august = 'Total Agree - August 2020',
+         percent_october = 'Total Agree - October 2020') %>% 
+  #adjusts percent data labels
+  mutate(bump_august = case_when(percent_august < percent_october ~ 
+                                   percent_august - 2,
+                                 percent_august > percent_october ~ 
+                                   percent_august + 2,
+                                 TRUE ~ NA_real_),
+         bump_october = case_when(percent_august < percent_october ~ 
+                                    percent_october + 2,
+                                  percent_august > percent_october ~
+                                    percent_october - 2,
+                                  TRUE ~ percent_october + 2),
+         y_position = rev(1:nrow(.))) %>% 
+  mutate(country = recode(country, 
+                          "South Korea" = "S.Korea",
+                          "South Africa" = "S. Africa",
+                          "United Kingdom" = "UK",
+                          "United States" = "USA"
+  )) %>% 
+  filter(country != "Total")
+
+striped_data <- data_chartr %>% 
+  select(country, y_position) %>% 
+  mutate(xmin = 50, 
+         xmax = 100,
+         ymin = y_position - 0.5,
+         ymax = y_position + 0.5,
+         fill = c(rep(c("a","b"), length.out = nrow(.)))) %>% 
+  # If you want to change the top stripe
+  # fill = c("c", rep(c("a","b"), length.out = nrow(.)-1))) 
+  pivot_longer(cols = c(xmin, xmax), values_to = "x", names_to = "xmin_xmax") %>% 
+  select(-xmin_xmax)
+
+arrows_data <- data_chartr %>% 
+  filter(abs(percent_august - percent_october) > 1) %>% 
+  mutate(midpoint = (percent_august + 2*percent_october)/3) %>% 
+  select(country, y_position, percent_august, midpoint) %>% 
+  pivot_longer(c(percent_august, midpoint), names_to = "type", values_to = "x")
+
+
+data_chartr %>% 
+  pivot_longer(cols = -c(country, y_position), 
+               names_to = c(".value", "month"), 
+               names_sep = "_") %>% 
+  drop_na() %>% 
+  #   mutate(country = as_factor(country) %>% fct_rev()) %>% 
+  ggplot(aes(percent, y_position, color = month, group = y_position)) +
+  geom_ribbon(data = striped_data,
+              aes(x = x, ymin = ymin, ymax =ymax, group = y_position, fill = fill),
+              inherit.aes = FALSE,
+              show.legend = FALSE) +
+  
+  geom_line(color = "#153744", size = 0.75, show.legend = FALSE) +
+  #adding arrow segments
+  geom_path(data = arrows_data, aes(x=x, y=y_position, group = y_position),
+            color = "#153744",
+            size = 0.75,
+            arrow = arrow(angle = 30, 
+                          length = unit(0.1, "inches"), 
+                          ends = "last", 
+                          type = "closed"),
+            show.legend = FALSE,
+            inherit.aes = FALSE) +
+  
+  geom_point(size = 3, show.legend = TRUE) + 
+  
+  geom_text(aes(label = glue("{percent}%"), 
+                x = bump), 
+            color = "#686868",
+            size = 4.5,
+            show.legend = FALSE,
+            family = "josefin-sans") +
+  scale_color_manual(name = "If a vaccine for COVID-19 were\navailable, I totally agree I would get it...", 
+                     breaks = c("october", "august"),
+                     values = c("#59ac74", "#153744"),
+                     labels = c("<span style = 'color:#59ac74'>October '20</span>", 
+                                "<span style = 'color:#153744'>August '20</span>"),
+                     #make the dots in legend bigger than dots in graph
+                     guide = guide_legend(override.aes = list(size=5))) +
+  #Modify the color of the stripes in the background
+  scale_fill_manual(name = NULL,
+                    breaks = c("a","b","c"),
+                    values = c("#dfeaf9","#edf4f7","#f3fafe"),
+                    labels = c("a","b","c")) +
+  scale_x_continuous(limits = c(50, 100),
+                     breaks = seq(50,100, by = 5),
+                     labels = glue("{seq(50, 100, by = 5)}%"),
+                     expand = c(0,0)) +
+  #building tick marks on y-axis
+  scale_y_continuous(breaks = c(data$y_position, 0.5, data$y_position + .5,
+                                length(data$y_position) + 1.5),
+                     labels = c(data$country, rep("", length(data$y_position)+2)),
+                     expand = c(0,0),
+                     limits = c(0.5,16.5)) +
+  #use CSS to change colors of letters in a word
+  labs(x = "<span style = 'color:#4da6be;'>chart</span><span style ='color:#e9b388;'>r</span>",
+       y = NULL, 
+       title = "Vaccine Skepticism by Country",
+       caption = "Source: Ipsos") +
+  theme_classic() +
+  #family of fonts: sans, serif, mono, symbol (doesn't work without matched symbols)
+  theme(
+    text = element_text(family = "josefin-sans"),
+    #title
+    plot.title.position = "plot",
+    plot.title = element_text(face = "bold", 
+                              #add space above and below the title
+                              margin = margin(b = 35, t =15),
+                              color = "#2e737b",
+                              family = "josefin-slab",
+                              size = 30,
+                              hjust = 0),
+    #element markdown is needed to use CSS in the caption
+    plot.caption = element_markdown(hjust = 0, color = "darkgray",
+                                    #Adjust the caption up by using negative number
+                                    margin = margin(t=-15)),
+    plot.caption.position = "plot",
+    #change the chart background
+    plot.background = element_rect(fill = "#f3fafe"),
+    panel.background = element_blank(),
+    plot.margin = margin(l=10, r=20), 
+    panel.grid = element_blank(),
+    #change the x axis tick marks
+    axis.ticks.x = element_blank(),
+    #set color of tick marks (next to country transparent)
+    axis.ticks.y = element_line(color = c(rep(NA, nrow(data)),
+                                          rep("darkgray", nrow(data) +2)),
+                                size = 0.2), 
+    axis.text.x = element_text(color = "#686868", 
+                               size = 12.5),
+    axis.text.y = element_text(size = 12.5),
+    #need this line so that you can use CSS for the x axis title
+    axis.title.x = element_markdown(size = 25, 
+                                    family = "josefin-slab",
+                                    face = "bold"),
+    axis.line = element_line(color = "darkgray",
+                             size = 0.2),
+    legend.position = c(0,1.0),
+    legend.direction = "horizontal",
+    legend.title = element_text(size = 12,
+                                lineheight = 1.2,
+                                margin = margin(b=5)),
+    legend.justification = "left",
+    #remove square behind color dots
+    legend.key = element_blank(),
+    #Makes the distance smaller between the colored dot and the legend words
+    legend.key.width = unit(3, "pt"),
+    legend.background = element_blank(),
+    #provide spacing between the legend marks
+    legend.text = element_markdown(margin = margin(l=5,r=10),
+                                   size = 12.5)
+  ) +
+  guides(fill = "none") +
+  coord_cartesian(clip = "off")
+
+
