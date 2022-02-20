@@ -5,7 +5,7 @@ library(tidyquant)
 library(ggtext)
 library(showtext)
 library(ggrepel)
-
+library(glue)
 
 #add in goggle fonts
 font_add_google(family = "josefin-slab","Josefin Slab")
@@ -17,7 +17,7 @@ font_add_google(family = "montserrat", "Montserrat")
 #function used to tell the code below use the above fonts
 showtext_auto()
 
-COVIDVAX <- read_excel("~/COVIDVAX.xlsx")
+COVIDVAX <- read_excel("COVIDVAX.xlsx")
 
 # Ipsos ----
 
@@ -196,9 +196,9 @@ data_chartr %>%
                        labels = glue("{seq(50, 100, by = 5)}%"),
                        expand = c(0,0)) +
     #building tick marks on y-axis
-    scale_y_continuous(breaks = c(data$y_position, 0.5, data$y_position + .5,
-                                  length(data$y_position) + 1.5),
-                       labels = c(data$country, rep("", length(data$y_position)+2)),
+    scale_y_continuous(breaks = c(data_chartr$y_position, 0.5, data_chartr$y_position + .5,
+                                  length(data_chartr$y_position) + 1.5),
+                       labels = c(data_chartr$country, rep("", length(data_chartr$y_position)+2)),
                        expand = c(0,0),
                        limits = c(0.5,16.5)) +
     #use CSS to change colors of letters in a word
@@ -232,8 +232,8 @@ data_chartr %>%
           #change the x axis tick marks
           axis.ticks.x = element_blank(),
           #set color of tick marks (next to country transparent)
-          axis.ticks.y = element_line(color = c(rep(NA, nrow(data)),
-                                                rep("darkgray", nrow(data) +2)),
+          axis.ticks.y = element_line(color = c(rep(NA, nrow(data_chartr)),
+                                                rep("darkgray", nrow(data_chartr) +2)),
                                       size = 0.2), 
           axis.text.x = element_text(color = "#686868", 
                                      size = 12.5),
@@ -346,8 +346,8 @@ data_mashup %>%
                        labels = NULL,
                        expand = c(0,0)) +
     #building tick marks on y-axis
-    scale_y_continuous(breaks = data$y_position,
-                       labels = data$country, 
+    scale_y_continuous(breaks = data_chartr$y_position,
+                       labels = data_chartr$country, 
                        expand = c(0,0),
                        limits = c(0.5,16.5)) +
     #use CSS to change colors of letters in a word
@@ -661,3 +661,85 @@ theme_darkmode <- function(bg = "#212121",
     
 p + 
     theme_darkmode()
+
+# Different Branch
+
+# Set Colors 
+base <- "#FFFFFF"    
+primary <- "#AAAAAA"
+secondary <- "#000000"
+highlight <- "#B51300"
+
+# Set Text
+title_name <- "patua-one"
+body <-  "montserrat"
+
+title <- glue("Between August and October of 2020, <span style='color:#AAAAAA'>people's intention</span> to receive the COVID-19 vaccine <span style='color:#B51300'>{data_highlight_title$direction} by {data_highlight_title$diff}% in the {data_highlight_title$country}</span>")
+
+
+data_highlight <- COVIDVAX %>% 
+    rename(country = X.1, 
+           august = 'Total Agree - August 2020',
+           october = 'Total Agree - October 2020') %>% 
+    filter(country != "Total") %>% 
+    mutate(country = recode(country, 
+                            "South Korea" = "S.Korea",
+                            "South Africa" = "S. Africa",
+                            "United Kingdom" = "UK",
+                            "United States" = "USA")) %>% 
+    pivot_longer(-country, names_to = "month", values_to = "percent") %>% 
+    mutate(country_highlight = (country == "USA"),
+           country = fct_reorder(country, country_highlight)) 
+
+data_highlight_title <- data_highlight %>% 
+    group_by(country) %>% 
+    summarise(diff = diff(percent),
+              direction = case_when(diff < 0 ~ "dropped",
+                                    diff >0 ~ "increased",
+                                    TRUE ~ "remained flat"),
+              diff = abs(diff)) %>% 
+    filter(country == "USA")
+
+data_highlight %>%  
+    ggplot(aes(month, percent, group = country, 
+               color = country_highlight, 
+               size = country_highlight)) +
+    geom_line(show.legend = FALSE,
+              lineend = "round") +
+    geom_point(show.legend = FALSE, 
+               size = 2.5) +
+    labs(title = title,
+         x = NULL, 
+         y = " Percent willing to receive vaccine",
+         caption = "<i>Base: 18,526 online aduts aged 16-74 across 15 countries</i><br>Source: Ipsos") +
+    scale_x_discrete(breaks = c("august", "october"),
+                     labels = c("August '20", "October '20"),
+                     expand = c(0.15,0.15)) +
+    scale_y_continuous(limits = c(50,100),
+                       breaks = seq(50,100, by = 10),
+                       minor_breaks = NULL,
+                       expand = c(0.03, 0.03)) +
+    scale_color_manual(breaks = c(F,T),
+                       values = c(primary, highlight)) + 
+    scale_size_manual(breaks = c(F,T),
+                      values = c(0.5, 1.5)) +
+    theme(text = element_text(family = body,
+                              color = primary),
+          plot.title.position = "plot",
+          plot.title = element_textbox_simple(family = title_name,
+                                              face = "bold",
+                                              color = secondary,
+                                              size = 20,
+                                              margin = margin(t=10, b =10)),
+          plot.background = element_rect(fill = base),
+          panel.background = element_rect(fill = base),
+          plot.caption.position = "plot",
+          plot.caption = element_markdown(hjust = 0,
+                                          color = primary,
+                                          margin = margin(t=10)),
+          axis.text = element_text(color = primary,
+                                   size = 12),
+          axis.title = element_text(size = 14),
+          axis.title.y = element_text(margin = margin(r=5)),
+          axis.ticks = element_blank())
+
