@@ -68,6 +68,9 @@ data_scatter %>%
     geom_text_repel(min.segment.length = 0,
                      max.overlaps = Inf,
                      family = body,
+                     # label.padding = 0.1,
+                     # label.r = 0,
+                     # label.size = 0,
                      size = 3.5) +
     labs(title = "COVID-19 Vaccination Intent is <span style='color:#B51300'>Decreasing</span> Globally",
          x = "Percent willing to receive<br>vaccine in August 2020", 
@@ -112,7 +115,8 @@ data_scatter %>%
               lineheight = 1,
               hjust = 0,
               size = 4,
-              inherit.aes = F)
+              inherit.aes = F,
+              family = body)
 
 
 
